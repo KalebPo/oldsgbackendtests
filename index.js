@@ -89,6 +89,24 @@ class CrownController {
     }
   }
 
+  static async listRank(req, res) {
+    try {
+      const { country = "", start = 0, count = 50 } = req.query;
+
+      const data = await UserModel.GetHighscore(
+        "rank",
+        country,
+        Number(start),
+        Number(count)
+      );
+
+      res.json(data);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+
   static async list(req, res) {
     try {
       const { country = "", start = 0, count = 50 } = req.query;
@@ -111,6 +129,10 @@ class CrownController {
 // =====================
 // ROTAS
 // =====================
+const sendSharedJson = (req, res) => {
+  res.status(200).json(require("./newshared.json"));
+};
+
 app.get("/matchmaking/filter", MatchmakingController.getMatchmakingFilter);
 
 app.post("/user/login", UserController.login);
@@ -120,10 +142,8 @@ app.post("/user/updateusername", UserController.updateUsername);
 app.get("/user/deleteaccount", UserController.deleteAccount);
 app.post("/user/linkplatform", UserController.linkPlatform);
 app.post("/user/unlinkplatform", UserController.unlinkPlatform);
-app.get("/shared/:version", (req, res) => {
-  res.status(200).json(require("./newshared.json"));
-});
-app.get("/shared/:version/:type", sendShared);
+app.get("/shared/:version", sendSharedJson);
+app.get("/shared/:version/:type", sendSharedJson);
 app.post("/user/profile", UserController.getProfile);
 app.post("/user-equipped-cosmetics/update", UserController.updateCosmetics);
 app.post("/user/cosmetics/addskin", UserController.addSkin);
@@ -173,6 +193,42 @@ app.get("/tournamentx/active/v2", TournamentXController.getActive.bind(Tournamen
 app.post("/tournamentx/:tournamentId/join/v2", TournamentXController.join.bind(TournamentXController));
 app.post("/tournamentx/:tournamentId/leave", TournamentXController.leave.bind(TournamentXController));
 app.post("/tournamentx/:tournamentId/finish", TournamentXController.finish.bind(TournamentXController));
+
+// =====================
+// ALIASES (caminhos usados pelo cliente, Backend.cs)
+// =====================
+const linkAs = (platform, field) => (req, res, next) => {
+  const body = req.body || {};
+  req.body = { platform, platformId: body[field] };
+  return UserController.linkPlatform(req, res, next);
+};
+
+app.all("/user/update", UserController.updateUsername);
+app.all("/user/profile/:userID", (req, res, next) => {
+  req.body = { ...(req.body || {}), userID: req.params.userID };
+  return UserController.getProfile(req, res, next);
+});
+app.all("/user/search", FriendsController.search);
+app.all("/user/news", NewsController.GetNews);
+app.all("/user/linkgoogle", linkAs("google", "GoogleId"));
+app.all("/user/linkfacebook", linkAs("facebook", "FacebookId"));
+app.all("/user/linkapple", linkAs("apple", "AppleId"));
+
+app.all("/user/friend/add/:friendId", (req, res, next) => {
+  req.body = { ...(req.body || {}), UserId: req.params.friendId };
+  return FriendsController.add(req, res, next);
+});
+app.all("/user/friend/remove/:friendId", (req, res, next) => {
+  req.params.UserId = req.params.friendId;
+  return FriendsController.remove(req, res, next);
+});
+
+app.all("/highscore/rank/list", CrownController.listRank);
+app.all("/tests/:currencyType/give/:amount", EconomyController.giveCurrency);
+
+app.all("/battlepass/claim", BattlePassController.claimReward);
+app.all("/battlepass/claimv2", BattlePassController.claimReward);
+app.all("/battlepass/purchasev2", BattlePassController.purchaseBattlePass);
 
 app.post("/api/v1/userLoginExternal", TournamentController.login);
 app.get("/api/v1/tournaments", TournamentController.getActive);
